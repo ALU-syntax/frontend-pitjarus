@@ -40,6 +40,9 @@ interface Store {
 const stores = ref<Store[]>([])
 const selectedStores = ref<number[]>([])
 
+const columns = ref<string[]>([])
+const rows = ref<any[]>([])
+
 /**
  * Date Range
  */
@@ -94,7 +97,7 @@ function isDateDisabled(date: CalendarDate) {
 
 const chartData = ref([]);
 
-async function getDataReport(selectedStores: [], dateFrom: DateValue, dateTo: DateValue) {
+async function getDataReportAreaSummary(selectedStores: [], dateFrom: DateValue, dateTo: DateValue) {
     const res = await api.post('/report/area-summary', {
         store_ids: selectedStores,
         start_date: dateFrom,
@@ -106,7 +109,18 @@ async function getDataReport(selectedStores: [], dateFrom: DateValue, dateTo: Da
         value: Number(item.compliance) // convert string ke number
     }));
 
-    return reportValue;
+    chartData.value = reportValue;
+}
+
+async function getDataReportBrandSummary(selectedStores: [], dateFrom: DateValue, dateTo: DateValue) {
+    const res = await api.post('/report/brand-area-summary', {
+        store_ids: selectedStores,
+        start_date: dateFrom,
+        end_date: dateTo
+    });
+
+    columns.value = res.data.columns
+    rows.value = res.data.rows
 }
 
 const loadChart = async () => {
@@ -131,22 +145,25 @@ const loadChart = async () => {
         return;
     }
 
-    const newData = getDataReport(selectedStores.value as [], dateFrom.value as DateValue, dateTo.value as DateValue);
-    newData.then(function (data) {
-        chartData.value = data;
-        toast.success('Berhasil!', {
-            description: "Data berhasil difetching"
-        });
+    fetchData(selectedStores.value as [], dateFrom.value as DateValue, dateTo.value as DateValue);
+    
+}
+
+function fetchData(selectedStores: [], dateFrom: DateValue, dateTo: DateValue) {
+    getDataReportAreaSummary(selectedStores, dateFrom, dateTo);
+    getDataReportBrandSummary(selectedStores, dateFrom, dateTo);
+
+    toast.success('Berhasil!', {
+        description: "Data berhasil difetching"
     });
+
 }
 
 onMounted(async () => {
     loadStores().then(() => {
         // fething data per hari ini ketika awal page di load
         const storeIdsOnly = stores.value.map(store => store.store_id)
-
-        const getReport = getDataReport(storeIdsOnly as [], today(getLocalTimeZone()), today(getLocalTimeZone()));
-        getReport.then((data) => chartData.value = data);
+        fetchData(storeIdsOnly as [], today(getLocalTimeZone()), today(getLocalTimeZone()));
     });
 });
 </script>
@@ -230,34 +247,31 @@ onMounted(async () => {
         </CardContent>
     </Card>
 
-    <Card class="space-y-6 m-10">
-        <!-- Table -->
+    <!-- TABLE -->
+    <Card class="m-10">
+        <CardHeader>
+            <CardTitle>Brand Compliance by Area</CardTitle>
+        </CardHeader>
+
         <CardContent>
             <Table>
                 <TableHeader>
-                    <TableRow v-if="chartData.length === 0">
-                        <TableCell colspan="3" class="text-center py-6 text-muted-foreground">
-                            Tidak ada data
-                        </TableCell>
-                    </TableRow>
-
                     <TableRow>
-                        <TableHead>Area</TableHead>
-                        <TableHead class="text-right">Compliance</TableHead>
-                        <TableHead class="text-right">Persentase</TableHead>
+                        <TableHead v-for="col in columns" :key="col">
+                            {{ col }}
+                        </TableHead>
                     </TableRow>
                 </TableHeader>
 
                 <TableBody>
-                    <TableRow v-for="(row, index) in chartData" :key="index">
-                        <TableCell>{{ row.name }}</TableCell>
-                        <TableCell class="text-right">{{ row.value }}</TableCell>
-                        <TableCell class="text-right">{{ row.value }}%</TableCell>
+                    <TableRow v-for="(row, index) in rows" :key="index">
+                        <TableCell v-for="col in columns" :key="col">
+                            {{ col === 'BRAND' ? row.brand : row[col] }}
+                        </TableCell>
                     </TableRow>
                 </TableBody>
             </Table>
         </CardContent>
-
     </Card>
 
 
